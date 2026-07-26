@@ -98,6 +98,7 @@ import StudentAcademicReport from "../Pages/Admin/AcademicReports/StudentAcademi
 import ClassRoutineReport from "../Pages/Admin/AcademicReports/ClassRoutineReport";
 import SyllabusCoverageReport from "../Pages/Admin/AcademicReports/SyllabusCoverageReport";
 import ClassSubjectAssignmentReport from "../Pages/Admin/AcademicReports/ClassSubjectAssignmentReport";
+import OverallHomeworkReport from "../Pages/Admin/AcademicReports/OverallHomeworkReport";
 import StudentAttendanceReport from "../Pages/Admin/StudentAttendanceReport";
 import StaffAttendanceReport from "../Pages/Admin/StaffAttendanceReport";
 import ExamAttendanceReport from "../Pages/Admin/ExamAttendanceReport";
@@ -258,6 +259,9 @@ const flattenRoutes = (navItems) => {
       }
       if (item.path === "/admin/academic/reports/assignments") {
         element = <ClassSubjectAssignmentReport />;
+      }
+      if (item.path === "/admin/academic/reports/homework") {
+        element = <OverallHomeworkReport />;
       }
 
       if (item.path === "/admin/homework/list") {

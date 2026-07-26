@@ -142,7 +142,10 @@ export const adminNavigation = [
   {
     name: "Homework",
     icon: BookOpen,
-    children: [{ name: "Home Work", path: "/admin/homework/list", icon: BookOpen }],
+    children: [
+      { name: "Home Work", path: "/admin/homework/list", icon: BookOpen },
+      { name: "Homework Report", path: "/admin/academic/reports/homework", icon: FileBarChart }
+    ],
   },
   {
     name: "Examination",
