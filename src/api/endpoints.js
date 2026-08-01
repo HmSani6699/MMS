@@ -26,7 +26,13 @@ const endpoints = {
   },
   talimat: {
     exams: '/v1/exams',
+    examNames: '/v1/exam-names',
+    examSchedules: '/v1/exam-schedules',
     results: '/v1/results',
+  },
+  common: {
+    classes: '/v1/classes',
+    subjects: '/v1/subjects',
   },
   mohtamim: {
     financeOverview: '/v1/finance/overview',

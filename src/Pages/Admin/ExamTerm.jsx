@@ -1,275 +1,359 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Plus,
   Search,
-  Filter,
-  MoreVertical,
-  Calendar,
-  Clock,
-  Edit2,
   Trash2,
   X,
-  CheckCircle2,
-  AlertCircle,
-  FileText
+  CalendarDays,
+  SquarePen,
+  Loader2
 } from "lucide-react";
+import InputField from "../../components/InputField";
+import DeleteConfirmationModal from "../../components/DeleteConfirmationModal";
+import toast from "react-hot-toast";
+import axiosInstance from "../../api/axiosInstance";
 
 const ExamTerm = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [modalType, setModalType] = useState("add"); // "add" | "edit"
 
-  // Sample Data: Exam Terms
-  const [terms, setTerms] = useState([
-    {
-      id: 1,
-      name: "First Term Examination 2026",
-      startDate: "2026-03-01",
-      endDate: "2026-03-15",
-      startTime: "09:00 AM",
-      endTime: "12:00 PM",
-      status: "Upcoming",
-    },
-    {
-      id: 2,
-      name: "Second Term Examination 2026",
-      startDate: "2026-06-10",
-      endDate: "2026-06-25",
-      startTime: "10:00 AM",
-      endTime: "01:00 PM",
-      status: "Scheduled",
-    },
-  ]);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+
+  const [terms, setTerms] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const initialFormState = {
+    _id: "",
+    name: "",
+    startDate: "",
+    endDate: "",
+    status: "Upcoming",
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
+
+  const fetchTerms = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axiosInstance.get("/v1/exam-names");
+      if (response.data.success) {
+        setTerms(response.data.data);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to fetch exam terms");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTerms();
+  }, []);
 
   const filteredTerms = terms.filter(term =>
-    term.name.toLowerCase().includes(searchTerm.toLowerCase())
+    term.name?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  return (
-    <div className="space-y-8 animate-in fade-in duration-500 p-6 md:p-8 bg-slate-50/50 min-h-screen">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            Exam Terms
-          </h1>
-          <p className="text-slate-500 font-medium mt-2">
-            Manage and schedule your academic examination terms.
-          </p>
-        </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="group px-6 py-3 bg-[#00bd7f] text-white rounded-xl hover:bg-[#00a570] transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 transform hover:-translate-y-0.5 flex items-center gap-3 font-bold"
-        >
-          <div className="bg-white/20 rounded-lg p-1 group-hover:rotate-90 transition-transform duration-300">
-            <Plus className="w-5 h-5" />
-          </div>
-          Create New Term
-        </button>
-      </div>
+  const openAddModal = () => {
+    setFormData(initialFormState);
+    setModalType("add");
+    setIsModalOpen(true);
+  };
 
-      {/* Stats / Quick Info Cards (Optional Addition for "Premium" feel) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-50 rounded-xl flex items-center justify-center text-[#00bd7f]">
-              <FileText className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">Total Terms</p>
-              <h3 className="text-2xl font-black text-slate-800">{terms.length}</h3>
-            </div>
+  const openEditModal = (term) => {
+    setFormData({
+      _id: term._id,
+      name: term.name || "",
+      startDate: term.startDate || "",
+      endDate: term.endDate || "",
+      status: term.status || "Upcoming"
+    });
+    setModalType("edit");
+    setIsModalOpen(true);
+  };
+
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setFormData(initialFormState);
+  };
+
+  const handleSave = async () => {
+    if (!formData.name) {
+      return toast.error("Exam Name is required");
+    }
+
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        name: formData.name,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        status: formData.status
+      };
+
+      if (modalType === "add") {
+        const response = await axiosInstance.post("/v1/exam-names", payload);
+        if (response.data.success) {
+          toast.success("Exam term created successfully");
+          fetchTerms();
+          closeModal();
+        }
+      } else {
+        const response = await axiosInstance.put(`/v1/exam-names/${formData._id}`, payload);
+        if (response.data.success) {
+          toast.success("Exam term updated successfully");
+          fetchTerms();
+          closeModal();
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || `Failed to ${modalType} exam term`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = (term) => {
+    setItemToDelete(term);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!itemToDelete) return;
+    try {
+      const response = await axiosInstance.delete(`/v1/exam-names/${itemToDelete._id}`);
+      if (response.data.success) {
+        toast.success("Exam term deleted successfully");
+        fetchTerms();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to delete exam term");
+    } finally {
+      setDeleteModalOpen(false);
+      setItemToDelete(null);
+    }
+  };
+
+  return (
+    <div className="animate-in fade-in duration-500">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-5">
+        <div>
+          <h1 className="text-[20px] font-black text-slate-800 flex items-center gap-3">
+            <CalendarDays className="w-8 h-8 text-[#00315e]" />
+            Exam Name List
+          </h1>
+          <div className="flex items-center gap-2 text-[14px] text-slate-500 font-bold mt-1">
+            <span>Dashboard</span>
+            <span>/</span>
+            <span>Examination</span>
+            <span>/</span>
+            <span className="text-[#00315e]">Exam Name List</span>
           </div>
         </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center text-blue-500">
-              <Calendar className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">Upcoming</p>
-              <h3 className="text-2xl font-black text-slate-800">1</h3>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center text-purple-500">
-              <CheckCircle2 className="w-6 h-6" />
-            </div>
-            <div>
-              <p className="text-slate-500 text-sm font-bold uppercase tracking-wider">Completed</p>
-              <h3 className="text-2xl font-black text-slate-800">0</h3>
+
+        <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+          <div className="flex items-center gap-3 w-full md:w-auto">
+            <div className="relative flex-1 md:w-[300px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by Exam Name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-[#fff] border border-slate-200 text-slate-900 rounded-[8px] outline-none focus:ring-0.5 focus:ring-blue-500 transition-all"
+              />
             </div>
           </div>
+          <button
+            onClick={openAddModal}
+            className="px-4 py-2 bg-[#00315e] text-white rounded-[8px] cursor-pointer flex items-center gap-2 whitespace-nowrap"
+          >
+            <Plus className="w-4 h-4" />
+            Add Exam
+          </button>
         </div>
       </div>
 
       {/* Main Content Area */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xl shadow-slate-200/50 overflow-hidden">
-        {/* Toolbar */}
-        <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row gap-4 justify-between items-center bg-white/50 backdrop-blur-sm">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search exam names..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-[#00bd7f] focus:ring-4 focus:ring-emerald-500/10 transition-all"
-            />
+      <div className="bg-white rounded-[8px] shadow-xl shadow-slate-100/50 overflow-hidden relative min-h-[400px]">
+        {isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+            <Loader2 className="w-8 h-8 text-[#00315e] animate-spin" />
           </div>
-          <div className="flex items-center gap-3">
-             <button className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-100 hover:text-slate-800 transition-colors flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              <span>Filter</span>
-            </button>
-             <button className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-100 hover:text-slate-800 transition-colors flex items-center gap-2">
-              <MoreVertical className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+        ) : null}
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-100">
-                <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Exam Name</th>
-                <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Schedule</th>
-                <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Timings</th>
-                <th className="px-8 py-5 text-left text-xs font-black text-slate-400 uppercase tracking-widest">Status</th>
-                <th className="px-8 py-5 text-right text-xs font-black text-slate-400 uppercase tracking-widest">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredTerms.map((term) => (
-                <tr key={term.id} className="group hover:bg-slate-50/80 transition-colors">
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100/50 flex items-center justify-center text-[#00bd7f] font-bold text-sm">
-                        {term.name.charAt(0)}
-                      </div>
-                      <span className="font-bold text-slate-700 text-base">{term.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
-                        <Calendar className="w-4 h-4 text-slate-400" />
-                        <span>{term.startDate} - {term.endDate}</span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
-                        <Clock className="w-4 h-4 text-slate-400" />
-                        <span>{term.startTime} - {term.endTime}</span>
-                    </div>
-                  </td>
-                  <td className="px-8 py-6">
-                     <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
-                        term.status === "active" || term.status === "Upcoming"
-                          ? "bg-emerald-100 text-[#00bd7f]"
-                          : "bg-slate-100 text-slate-500"
-                      }`}>
-                       <span className={`w-1.5 h-1.5 rounded-full ${term.status === "active" || term.status === "Upcoming" ? "bg-[#00bd7f]" : "bg-slate-400"}`}></span>
-                       {term.status}
-                     </span>
-                  </td>
-                  <td className="px-8 py-6 text-right">
-                    <div className="flex items-center justify-end gap-2 ">
-                      <button className="p-2 text-slate-400  rounded-lg transition-all" title="Edit">
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all" title="Delete">
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredTerms.length === 0 && (
+        {!isLoading && filteredTerms.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 px-4">
+            <div className="w-24 h-24 bg-blue-50 text-blue-300 rounded-full flex items-center justify-center mb-5 animate-pulse">
+              <CalendarDays className="w-12 h-12 text-[#00315e]/40" />
+            </div>
+            <h3 className="text-xl font-black text-slate-700 mb-2">কোনো পরীক্ষার টার্ম পাওয়া যায়নি</h3>
+            <p className="text-slate-500 font-medium text-center max-w-md">
+              আপনার তালিকায় এখন পর্যন্ত কোনো পরীক্ষার টার্ম যুক্ত করা হয়নি। নতুন টার্ম যোগ করতে "Add Exam" বাটনে ক্লিক করুন।
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-gray-200 rounded-[8px]">
+            <table className="w-full">
+              <thead className="bg-[#00315e24]">
                 <tr>
-                   <td colSpan="5" className="px-8 py-12 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
-                            <Search className="w-8 h-8 text-slate-300" />
-                        </div>
-                        <h3 className="text-lg font-black text-slate-800">No exams found</h3>
-                        <p className="text-slate-500 mt-1">Try adjusting your search or filters</p>
-                    </div>
-                   </td>
+                  <th className="px-10 py-3 text-left text-[12px] font-black">ID</th>
+                  <th className="px-10 py-3 text-center text-[12px] font-black">Exam Name</th>
+                  <th className="px-10 py-3 text-center text-[12px] font-black">Schedule</th>
+                  <th className="px-10 py-3 text-center text-[12px] font-black">Status</th>
+                  <th className="px-10 py-3 text-center text-[12px] font-black">Action</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y-2 divide-slate-50">
+                {filteredTerms.map((term, i) => (
+                  <tr key={term._id} className="group hover:bg-amber-50/10 transition-all duration-300">
+                    <td className="px-10 py-3">
+                      <span className="text-base font-medium text-slate-700">{i + 1}</span>
+                    </td>
+                    <td className="px-10 py-3 text-center">
+                      <span className="text-base font-black text-slate-800">{term.name}</span>
+                    </td>
+                    <td className="px-10 py-3 text-center">
+                      <span className="text-sm font-bold text-slate-600">
+                        {term.startDate} {term.startDate && term.endDate && "to"} {term.endDate}
+                      </span>
+                    </td>
+                    <td className="px-10 py-3 text-center">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest ${term.status === "Active" || term.status === "Upcoming"
+                          ? "bg-blue-50 text-blue-700 border-blue-100"
+                          : "bg-amber-50 text-amber-700 border-amber-100"
+                          }`}
+                      >
+                        <div
+                          className={`w-1.5 h-1.5 rounded-full ${term.status === "Active" || term.status === "Upcoming"
+                            ? "bg-blue-500"
+                            : "bg-amber-500"
+                            }`}
+                        />
+                        {term.status || "Upcoming"}
+                      </span>
+                    </td>
+                    <td className="px-10 py-3 text-center">
+                      <div className="flex items-center gap-3 justify-center">
+                        <button className="cursor-pointer" onClick={() => openEditModal(term)}>
+                          <SquarePen className="w-4 h-4 text-[#00315e]" />
+                        </button>
+                        <button className="cursor-pointer" onClick={() => handleDeleteClick(term)}>
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Modern Modal */}
+      {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl transform transition-all animate-in zoom-in-95 duration-200 overflow-hidden">
-            <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-white">
-              <h2 className="text-2xl font-black text-slate-800">New Exam Term</h2>
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[100] flex items-center justify-center p-6 sm:p-10">
+          <div className="bg-white rounded-[8px] w-full max-w-lg shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] animate-in fade-in zoom-in duration-300 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-6 border-b-2 border-slate-100 flex items-center justify-between bg-white">
+              <h2 className="text-xl font-black text-slate-800 tracking-tight">
+                {modalType === "add" ? "Add New Term" : "Update Term"}
+              </h2>
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 hover:bg-slate-100 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                onClick={closeModal}
+                className="p-2 hover:bg-slate-100 rounded-xl transition-all cursor-pointer"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 text-slate-400" />
               </button>
             </div>
-            
-            <div className="p-8 space-y-6">
-                {/* Form Fields */}
-                <div className="space-y-4">
-                    <div className="space-y-2">
-                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Exam Name</label>
-                        <input
-                            type="text"
-                            placeholder="e.g. First Term Examination 2026"
-                            className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold focus:outline-none focus:border-[#00bd7f] focus:ring-4 focus:ring-emerald-500/10 transition-all placeholder:text-slate-400 placeholder:font-normal"
-                        />
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                         <div className="space-y-2">
-                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">Start Date</label>
-                            <div className="relative">
-                                <input type="date" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold focus:outline-none focus:border-[#00bd7f] focus:ring-4 focus:ring-emerald-500/10 transition-all" />
-                            </div>
-                        </div>
-                        <div className="space-y-2">
-                            <label className="text-xs font-black text-slate-500 uppercase tracking-widest ml-1">End Date</label>
-                             <div className="relative">
-                                <input type="date" className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-slate-800 font-bold focus:outline-none focus:border-[#00bd7f] focus:ring-4 focus:ring-emerald-500/10 transition-all" />
-                            </div>
-                        </div>
-                    </div>
+            <div className="p-5">
+              <div className="flex flex-col gap-4">
+                <InputField
+                  title="Exam Name"
+                  placeholder="e.g. First Term Examination 2026"
+                  value={formData.name}
+                  setValue={(val) => handleInputChange("name", val)}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <InputField
+                    title="Start Date"
+                    type="date"
+                    value={formData.startDate}
+                    setValue={(val) => handleInputChange("startDate", val)}
+                  />
+                  <InputField
+                    title="End Date"
+                    type="date"
+                    value={formData.endDate}
+                    setValue={(val) => handleInputChange("endDate", val)}
+                  />
                 </div>
 
-                <div className="pt-4 flex gap-4">
-                    <button
-                        onClick={() => setIsModalOpen(false)}
-                        className="flex-1 py-4 text-slate-600 font-black bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        className="flex-1 py-4 bg-[#00bd7f] text-white rounded-2xl hover:bg-[#00a570] transition-all shadow-lg shadow-emerald-200 hover:shadow-emerald-300 font-bold flex items-center justify-center gap-2"
-                    >
-                        <CheckCircle2 className="w-5 h-5" />
-                        Create Term
-                    </button>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[13px] font-bold text-slate-700">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => handleInputChange("status", e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 text-slate-900 rounded-[8px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium text-sm"
+                  >
+                    <option value="Upcoming">Upcoming</option>
+                    <option value="Active">Active</option>
+                    <option value="Completed">Completed</option>
+                  </select>
                 </div>
+              </div>
+
+              <div className="p-6 border-t-2 border-slate-100 bg-slate-50 flex justify-end gap-4 mt-5 -mx-5 -mb-5 rounded-b-[8px]">
+                <button
+                  onClick={closeModal}
+                  className="px-6 py-3 font-bold text-slate-600 hover:bg-white rounded-xl transition-all border-2 border-transparent hover:border-slate-200 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={isSubmitting}
+                  className="px-8 py-3 bg-[#00315e] hover:bg-blue-900 text-white font-bold rounded-[8px] shadow-lg transition-all flex items-center gap-2 cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : null}
+                  {modalType === "add" ? "Add Term" : "Update Term"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
+        }}
+        onDelete={confirmDelete}
+        itemName={itemToDelete?.name}
+
+        description={
+          <>
+            আপনি কি নিশ্চিত যে আপনি <span className="font-semibold text-gray-800">"{itemToDelete?.name}"</span> টার্মটি মুছে ফেলতে চান? এই কাজটি বাতিল করা যাবে না।
+          </>
+        }
+        cancelText="বাতিল করুন"
+        confirmText="ডিলিট করুন"
+      />
     </div>
   );
 };
