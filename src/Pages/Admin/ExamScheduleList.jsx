@@ -39,6 +39,7 @@ const ExamScheduleList = () => {
     full_marks: 100,
     pass_marks: 33
   });
+  const [subjectSchedules, setSubjectSchedules] = useState({});
 
   // Delete State
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -53,8 +54,26 @@ const ExamScheduleList = () => {
       fetchSubjects(formData.class_id);
     } else {
       setSubjects([]);
+      setSubjectSchedules({});
     }
   }, [formData.class_id]);
+
+  useEffect(() => {
+    if (subjects.length > 0 && !editMode) {
+      const initialSchedules = {};
+      subjects.forEach(s => {
+        initialSchedules[s._id] = {
+          exam_date: "",
+          start_time: "",
+          end_time: "",
+          room_no: "",
+          full_marks: 100,
+          pass_marks: 33
+        };
+      });
+      setSubjectSchedules(initialSchedules);
+    }
+  }, [subjects, editMode]);
 
   useEffect(() => {
     fetchSchedules();
@@ -106,6 +125,16 @@ const ExamScheduleList = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
+  const handleSubjectScheduleChange = (subjectId, field, value) => {
+    setSubjectSchedules(prev => ({
+      ...prev,
+      [subjectId]: {
+        ...prev[subjectId],
+        [field]: value
+      }
+    }));
+  };
+
   const openAddModal = () => {
     setEditMode(false);
     setCurrentId(null);
@@ -120,6 +149,7 @@ const ExamScheduleList = () => {
       full_marks: 100,
       pass_marks: 33
     });
+    setSubjectSchedules({});
     setIsModalOpen(true);
   };
 
@@ -146,19 +176,45 @@ const ExamScheduleList = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.exam_id || !formData.class_id || !formData.subject_id || !formData.exam_date || !formData.start_time || !formData.end_time) {
-      toast.error("Please fill all required fields");
-      return;
-    }
 
     setIsSubmitting(true);
     try {
       if (editMode) {
+        if (!formData.exam_id || !formData.class_id || !formData.subject_id || !formData.exam_date || !formData.start_time || !formData.end_time) {
+          toast.error("Please fill all required fields");
+          setIsSubmitting(false);
+          return;
+        }
         await talimatService.updateExamSchedule(currentId, formData);
         toast.success("Schedule updated successfully");
       } else {
-        await talimatService.createExamSchedule(formData);
-        toast.success("Schedule created successfully");
+        if (!formData.exam_id || !formData.class_id) {
+          toast.error("Please select Exam and Class");
+          setIsSubmitting(false);
+          return;
+        }
+        
+        const promises = subjects.map(s => {
+          const sched = subjectSchedules[s._id];
+          if (sched && sched.exam_date && sched.start_time && sched.end_time) {
+            return talimatService.createExamSchedule({
+              exam_id: formData.exam_id,
+              class_id: formData.class_id,
+              subject_id: s._id,
+              ...sched
+            });
+          }
+          return null;
+        }).filter(Boolean);
+
+        if (promises.length === 0) {
+          toast.error("Please fill schedule for at least one subject");
+          setIsSubmitting(false);
+          return;
+        }
+
+        await Promise.all(promises);
+        toast.success("Schedules created successfully");
       }
       setIsModalOpen(false);
       fetchSchedules();
@@ -519,88 +575,170 @@ const ExamScheduleList = () => {
                     </select>
                   </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">Subject <span className="text-rose-500">*</span></label>
-                    <select
-                      name="subject_id"
-                      value={formData.subject_id}
-                      onChange={handleInputChange}
-                      required
-                      disabled={!formData.class_id}
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none bg-white text-sm transition-all disabled:bg-slate-50 disabled:text-slate-400"
-                    >
-                      <option value="">Select Subject</option>
-                      {subjects.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">Exam Date <span className="text-rose-500">*</span></label>
-                    <input
-                      type="date"
-                      name="exam_date"
-                      value={formData.exam_date}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
-                    />
-                  </div>
+                  {editMode ? (
+                    <>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">Subject <span className="text-rose-500">*</span></label>
+                        <select
+                          name="subject_id"
+                          value={formData.subject_id}
+                          onChange={handleInputChange}
+                          required
+                          disabled={!formData.class_id}
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none bg-white text-sm transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                        >
+                          <option value="">Select Subject</option>
+                          {subjects.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">Exam Date <span className="text-rose-500">*</span></label>
+                        <input
+                          type="date"
+                          name="exam_date"
+                          value={formData.exam_date}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">Start Time <span className="text-rose-500">*</span></label>
-                    <input
-                      type="time"
-                      name="start_time"
-                      value={formData.start_time}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">End Time <span className="text-rose-500">*</span></label>
-                    <input
-                      type="time"
-                      name="end_time"
-                      value={formData.end_time}
-                      onChange={handleInputChange}
-                      required
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
-                    />
-                  </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">Start Time <span className="text-rose-500">*</span></label>
+                        <input
+                          type="time"
+                          name="start_time"
+                          value={formData.start_time}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">End Time <span className="text-rose-500">*</span></label>
+                        <input
+                          type="time"
+                          name="end_time"
+                          value={formData.end_time}
+                          onChange={handleInputChange}
+                          required
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm text-slate-700 transition-all"
+                        />
+                      </div>
 
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">Room No</label>
-                    <input
-                      name="room_no"
-                      value={formData.room_no}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
-                      placeholder="e.g. 101"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-bold text-slate-700">Max Marks</label>
-                    <input
-                      type="number"
-                      name="full_marks"
-                      value={formData.full_marks}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
-                      placeholder="100"
-                    />
-                  </div>
-                  <div className="space-y-1.5 col-span-2">
-                    <label className="text-sm font-bold text-slate-700">Min Marks</label>
-                    <input
-                      type="number"
-                      name="pass_marks"
-                      value={formData.pass_marks}
-                      onChange={handleInputChange}
-                      className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
-                      placeholder="33"
-                    />
-                  </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">Room No</label>
+                        <input
+                          name="room_no"
+                          value={formData.room_no}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
+                          placeholder="e.g. 101"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-bold text-slate-700">Max Marks</label>
+                        <input
+                          type="number"
+                          name="full_marks"
+                          value={formData.full_marks}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
+                          placeholder="100"
+                        />
+                      </div>
+                      <div className="space-y-1.5 col-span-2">
+                        <label className="text-sm font-bold text-slate-700">Min Marks</label>
+                        <input
+                          type="number"
+                          name="pass_marks"
+                          value={formData.pass_marks}
+                          onChange={handleInputChange}
+                          className="w-full px-4 py-2.5 rounded-[8px] border border-slate-200 focus:border-[#00315e] focus:ring-4 focus:ring-blue-50 outline-none text-sm transition-all"
+                          placeholder="33"
+                        />
+                      </div>
+                    </>
+                  ) : null}
                 </div>
+                
+                {!editMode && formData.class_id && subjects.length > 0 && (
+                  <div className="mt-6 border border-slate-200 rounded-[8px] overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="bg-[#00315e24]">
+                          <tr className="whitespace-nowrap">
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Subject</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Date *</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Start *</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">End *</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Room</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Max M.</th>
+                            <th className="px-4 py-3 text-left text-xs font-black text-slate-800 uppercase tracking-wider">Min M.</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {subjects.map(subject => (
+                            <tr key={subject._id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                <span className="font-bold text-sm text-slate-700">{subject.name}</span>
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="date"
+                                  value={subjectSchedules[subject._id]?.exam_date || ""}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'exam_date', e.target.value)}
+                                  className="w-[130px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="time"
+                                  value={subjectSchedules[subject._id]?.start_time || ""}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'start_time', e.target.value)}
+                                  className="w-[110px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="time"
+                                  value={subjectSchedules[subject._id]?.end_time || ""}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'end_time', e.target.value)}
+                                  className="w-[110px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="text"
+                                  value={subjectSchedules[subject._id]?.room_no || ""}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'room_no', e.target.value)}
+                                  placeholder="101"
+                                  className="w-[70px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="number"
+                                  value={subjectSchedules[subject._id]?.full_marks || 100}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'full_marks', e.target.value)}
+                                  className="w-[60px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="number"
+                                  value={subjectSchedules[subject._id]?.pass_marks || 33}
+                                  onChange={(e) => handleSubjectScheduleChange(subject._id, 'pass_marks', e.target.value)}
+                                  className="w-[60px] px-2 py-1.5 rounded-[6px] border border-slate-200 focus:border-[#00315e] outline-none text-sm text-slate-700"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="p-6 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 rounded-b-[8px]">
                 <button
